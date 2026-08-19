@@ -1,0 +1,59 @@
+/*
+ * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright 2026 Free Mobile - Vincent Jardin
+ *
+ * nbxv3 BASE LAYER
+ *
+ * Frequencies:
+ *   Core     -- 2200 MHz
+ *   Platform -- 700  MHz
+ *   DDR      -- 2400 MT/s (both controllers)
+ *   DCE      --  450 MHz  (CGB_PLL2 / 2)
+ */
+#include <lx2160a.rcwi>
+#include <lx2160a_regs.rcw>
+
+/* nbxv3 BL2 lives at NOR offset 0x9000 (= 36 KB)
+ * The "boot entry" is the AHB-window view of that flash
+ * offset, which is what core 0's reset vector (BOOTLOCPTR) latches.
+ */
+#define NBXV3_BL2_NOR_OFFSET    0x00009000
+#define NBXV3_BL2_BOOT_ENTRY    (FLEXSPI0_AHB_BASE + NBXV3_BL2_NOR_OFFSET)
+
+/*
+ * Clocks
+ *
+ *   SYSCLK from on-board DPLL = 100 MHz
+ *   platform_clk = SYSCLK * SYS_PLL_RAT / 2 = 700 MHz
+ *   UART1 input  = platform_clk / 4         = 175 MHz
+ *                  (with IBRD=0x5E, FBRD=0x3C in uart1_version.rcwi
+ *                   -> 115200 baud cleanly)
+ *   DDR1         = SYSCLK * MEM_PLL_RAT     = 2400 MT/s
+ *   DDR2         = SYSCLK * MEM2_PLL_RAT    = 2400 MT/s
+ *   Cores        = SYSCLK * CGA_PLL{1,2}_RAT
+ *                = SYSCLK * CGB_PLL1_RAT    = 1200 MHz   (floor)
+ *   DCE source   = CGB_PLL2 / 2             = 450 MHz
+ */
+SYS_PLL_RAT=14
+MEM_PLL_CFG=3
+MEM_PLL_RAT=24
+MEM2_PLL_CFG=3
+MEM2_PLL_RAT=24
+CGA_PLL1_RAT=22
+CGA_PLL2_RAT=22
+CGB_PLL1_RAT=22
+CGB_PLL2_RAT=9
+C5_PLL_SEL=0
+C6_PLL_SEL=0
+C7_PLL_SEL=0
+C8_PLL_SEL=0
+SYSCLK_FREQ=600
+
+#include "uart1_version.rcwi"
+
+/* PBI: Boot Location Pointer */
+.pbi
+write 0x01e00404, 0x00000000             /* DCFG_BOOTLOCPTRH = 0 */
+write 0x01e00400, NBXV3_BL2_BOOT_ENTRY   /* DCFG_BOOTLOCPTRL = NOR AHB BL2 XIP entry */
+.end
+
