@@ -1,4 +1,33 @@
 /*
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Derived from the upstream NXP tree, lx2160asi/a050426.rcw:
+ *   Copyright 2011-2016 Freescale Semiconductor, Inc
+ *   Copyright 2017-2020 NXP
+ * Modifications Copyright 2026 Free Mobile - Vincent Jardin
+ *
+ * Local variant of NXP's lx2160asi/a050426.rcw with the lnx1_xfi RAM-scrub
+ * block removed.
+ *
+ * A-050426: after PORESET de-assertion the internal RAM of QDMA, FECA and
+ * PCIe may corrupt its first write or read access. The workaround scrubs
+ * those RAMs from the PBI, and NXP splits it into four labelled blocks:
+ *
+ *      PEX            PCIe RAM            kept
+ *      lnx1_e100g     Lynx1 100G RAM      kept (SD1 100G + 4x25G)
+ *      lnx1_xfi       Lynx1 XFI/10G RAM   <-- REMOVED
+ *      lnx2_xfi       Lynx2 XFI RAM       kept (USXGMII13/14)
+ *
+ * == lnx1_xfi (-1088 bytes)
+ *
+ * It should be safe: SD1 runs SRDS_PRTCL_S1=13, which is 100GE. XFI is the
+ * 10G datapath and no SD1 lane is configured for it, so we should be good ?
+ *
+ * Saving so many bytes, it worths trying !
+ *
+ */
+
+/*
  * Work-around for erratum A-050426
  *
  * Problem: After PORESET de-assertion, internal RAM first write or
