@@ -1,61 +1,4 @@
 /*
- * SPDX-License-Identifier: BSD-3-Clause
- *
- * Derived from the upstream NXP tree, lx2160asi/a050426.rcw:
- *   Copyright 2011-2016 Freescale Semiconductor, Inc
- *   Copyright 2017-2020 NXP
- * Modifications Copyright 2026 Free Mobile - Vincent Jardin
- *
- * Local variant of NXP's lx2160asi/a050426.rcw with the lnx1_xfi RAM-scrub
- * block removed, and the PEX block narrowed to the PCIe controllers this
- * board actually powers.
- *
- * A-050426: after PORESET de-assertion the internal RAM of QDMA, FECA and
- * PCIe may corrupt its first write or read access. The workaround scrubs
- * those RAMs from the PBI, and NXP splits it into four labelled blocks:
- *
- *      PEX            PCIe RAM            kept, minus PEX1/PEX2
- *      lnx1_e100g     Lynx1 100G RAM      kept (SD1 100G + 4x25G)
- *      lnx1_xfi       Lynx1 XFI/10G RAM   <-- REMOVED
- *      lnx2_xfi       Lynx2 XFI RAM       kept (USXGMII13/14)
- *
- * == PEX1 / PEX2 (-152 bytes)
- *
- * SD1 runs SRDS_PRTCL_S1=13, which is 100GE without PCIe, so the SerDes
- * protocol decoder leaves PEX1 and PEX2 power-gated. Some other errata on
- * this board already skip them for exactly that same reason.
- *
- * Identifying which group is which controller took a derivation, because
- * NXP labels none of them. The PEX block runs under ALTCFG window 0x1C2,
- * so its offsets sit at (0x1C2 << 26) = 0x7_0800_0000, which the RM memory
- * map gives as DCSR. The six groups land at DCSR offsets
- *
- *      0x0A50_8000   0x0A60_8000   0x0A70_8000
- *      0x0A80_8000   0x0AA0_8000   0x0AB0_8000
- *
- * a 1 MiB stride with 0x0A90 unpopulated and two of them, 0x0A70 and
- * 0x0AA0, carry twice as many scrub sites as the other four. RM 22.4.1 /
- * 22.4.2: PCIe3 and PCIe5 are the only SR-IOV instances. Assigning PCIe1..6
- * in address order across the six populated slots puts PCIe3 at 0x0A70 and
- * PCIe5 at 0x0AA0, i.e. both double-sized slots, no other assignment
- * satisfies both anchors. That fixes 0x0A50 = PEX1 and 0x0A60 = PEX2, the
- * two dropped here.
- *
- * WARNING TBC: that is a deduction from the site-count / SR-IOV coincidence,
- * not a statement in the RM, which does not name these DCSR sub-blocks.
- * Removing writes is the safe direction, an un-scrubbed RAM that nothing
- * ever accesses cannot corrupt an access, but it has NOT been full confirmed.
- *
- * == lnx1_xfi (-1088 bytes)
- *
- * It should be safe: SD1 runs SRDS_PRTCL_S1=13, which is 100GE. XFI is the
- * 10G datapath and no SD1 lane is configured for it, so we should be good ?
- *
- * Saving so many bytes, it worths trying !
- *
- */
-
-/*
  * Work-around for erratum A-050426
  *
  * Problem: After PORESET de-assertion, internal RAM first write or
@@ -66,6 +9,8 @@
  * Workaround: PBI sequence is required after the boot sequence is completed
  * and when the SoC comes out of POR reset.
  */
+
+#include <../lx2160asi/serdes_prtcl.rcw>
 
 .pbi
 
@@ -104,22 +49,61 @@ loadacwindow 0x1C0
 awrite 0x117E60,0x80000001
 .end
 
-/* PEX */
+/*
+ * PEX
+ *
+ * 6 scrub groups, one per PCI Express controller, 1 MiB apart in the
+ * DCSR window opened by loadacwindow 0x1C2:
+ * 0x25, 0x26, 0x27, 0x28, 0x2A, 0x2B, with 0x29 unpopulated.
+ * Assigning PCIe1..PCIe6 to them in ascending address order is the only
+ * assignment consistent with the* one anchor available:
+ *  - 0x27 and 0x2A carry twice as many scrub sites as the other four,
+ *  - and PCIe3 and PCIe5 are the only SR-IOV instances (RM 22.4.1 / 22.4.2),
+ * so those two must be the double-sized ones.
+ *
+ * WARNING TBC: that is a deduction from the site counts, not a statement in
+ * the RM, which does not name these DCSR sub-blocks. It only matters to
+ * a board that declares its SerDes protocols, leaving them undeclared
+ * scrubs all six as before.
+ */
+#if PEX1_ACTIVE || PEX2_ACTIVE || PEX3_ACTIVE || PEX4_ACTIVE || \
+    PEX5_ACTIVE || PEX6_ACTIVE
 .pbi
 loadacwindow 0x1C2
-awrite.b4 0x2808000,0x64a8150e,0xcfc4885c   /* PCIe4 */
+#if PEX1_ACTIVE                 /* 0x25 */
+awrite.b4 0x2508000,0x64a8150e,0xcfc4885c
+awrite 0x2508008,0x40ee75fe
+awrite.b5 0x2518000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x2518010,0x4416e4be
+awrite.b5 0x2520000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x2520010,0x4416e4be
+#endif
+#if PEX2_ACTIVE                 /* 0x26 */
+awrite.b4 0x2608000,0x64a8150e,0xcfc4885c
+awrite 0x2608008,0x40ee75fe
+awrite.b5 0x2618000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x2618010,0x4416e4be
+awrite.b5 0x2620000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x2620010,0x4416e4be
+#endif
+#if PEX4_ACTIVE                 /* 0x28 */
+awrite.b4 0x2808000,0x64a8150e,0xcfc4885c
 awrite 0x2808008,0x40ee75fe
 awrite.b5 0x2818000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2818010,0x4416e4be
 awrite.b5 0x2820000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2820010,0x4416e4be
-awrite.b4 0x2B08000,0x64a8150e,0xcfc4885c   /* PCIe6 */
+#endif
+#if PEX6_ACTIVE                 /* 0x2B */
+awrite.b4 0x2B08000,0x64a8150e,0xcfc4885c
 awrite 0x2B08008,0x40ee75fe
 awrite.b5 0x2B18000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2B18010,0x4416e4be
 awrite.b5 0x2B20000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2B20010,0x4416e4be
-awrite.b5 0x2708000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f   /* PCIe3 (SR-IOV) */
+#endif
+#if PEX3_ACTIVE                 /* 0x27 */
+awrite.b5 0x2708000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2708010,0x4416e4be
 awrite.b5 0x2728000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2728010,0x4416e4be
@@ -131,7 +115,9 @@ awrite.b5 0x2748000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2748010,0x4416e4be
 awrite.b5 0x2758000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2758010,0x4416e4be
-awrite.b5 0x2A08000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f   /* PCIe5 (SR-IOV) */
+#endif
+#if PEX5_ACTIVE                 /* 0x2A */
+awrite.b5 0x2A08000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2A08010,0x4416e4be
 awrite.b5 0x2A28000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2A28010,0x4416e4be
@@ -143,9 +129,17 @@ awrite.b5 0x2A48000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2A48010,0x4416e4be
 awrite.b5 0x2A58000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2A58010,0x4416e4be
+#endif
 .end
+#endif /* any PEX */
 
-/* lnx1_e100g */
+/*
+ * lnx1_e100g
+ *
+ * Lynx 1 100G-class RAM: needed only when the SerDes 1 protocol
+ * assigns lanes to CAUI / 50G / 40G / 25G (RM Table 289).
+ */
+#if SD1_E100G
 .pbi
 loadacwindow 0x1C3
 awrite.b4 0xA000,0x64a8150e,0xcfc4885c
@@ -253,8 +247,122 @@ awrite 0x16008,0x40ee75fe
 awrite.b4 0x17000,0x64a8150e,0xcfc4885c
 awrite 0x17008,0x40ee75fe
 .end
+#endif /* SD1_E100G */
 
-/* lnx2_xfi */
+/*
+ * lnx1_xfi
+ *
+ * Lynx 1 USXGMII/XFI RAM: needed only when the SerDes 1 protocol
+ * assigns lanes to USXFI (RM Table 289).
+ */
+#if SD1_USXFI
+.pbi
+awrite.b4 0x108000,0x64a8150e,0xcfc4885c
+awrite 0x108008,0x40ee75fe
+awrite.b4 0x108200,0x64a8150e,0xcfc4885c
+awrite 0x108208,0x40ee75fe
+awrite.b4 0x10A000,0x64a8150e,0xcfc4885c
+awrite 0x10A008,0x40ee75fe
+awrite.b4 0x10A400,0x64a8150e,0xcfc4885c
+awrite 0x10A408,0x40ee75fe
+awrite.b5 0x10C000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x10C010,0x4416e4be
+awrite.b5 0x10C400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x10C410,0x4416e4be
+awrite.b4 0x10E000,0x64a8150e,0xcfc4885c
+awrite 0x10E008,0x40ee75fe
+awrite.b4 0x10E200,0x64a8150e,0xcfc4885c
+awrite 0x10E208,0x40ee75fe
+awrite.b4 0x110000,0x64a8150e,0xcfc4885c
+awrite 0x110008,0x40ee75fe
+awrite.b4 0x110400,0x64a8150e,0xcfc4885c
+awrite 0x110408,0x40ee75fe
+awrite.b5 0x112000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x112010,0x4416e4be
+awrite.b5 0x112400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x112410,0x4416e4be
+awrite.b4 0x114000,0x64a8150e,0xcfc4885c
+awrite 0x114008,0x40ee75fe
+awrite.b4 0x114200,0x64a8150e,0xcfc4885c
+awrite 0x114208,0x40ee75fe
+awrite.b4 0x116000,0x64a8150e,0xcfc4885c
+awrite 0x116008,0x40ee75fe
+awrite.b4 0x116400,0x64a8150e,0xcfc4885c
+awrite 0x116408,0x40ee75fe
+awrite.b5 0x118000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x118010,0x4416e4be
+awrite.b5 0x118400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x118410,0x4416e4be
+awrite.b4 0x11A000,0x64a8150e,0xcfc4885c
+awrite 0x11A008,0x40ee75fe
+awrite.b4 0x11A200,0x64a8150e,0xcfc4885c
+awrite 0x11A208,0x40ee75fe
+awrite.b4 0x11C000,0x64a8150e,0xcfc4885c
+awrite 0x11C008,0x40ee75fe
+awrite.b4 0x11C400,0x64a8150e,0xcfc4885c
+awrite 0x11C408,0x40ee75fe
+awrite.b5 0x11E000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x11E010,0x4416e4be
+awrite.b5 0x11E400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x11E410,0x4416e4be
+awrite.b4 0x120000,0x64a8150e,0xcfc4885c
+awrite 0x120008,0x40ee75fe
+awrite.b4 0x120200,0x64a8150e,0xcfc4885c
+awrite 0x120208,0x40ee75fe
+awrite.b4 0x122000,0x64a8150e,0xcfc4885c
+awrite 0x122008,0x40ee75fe
+awrite.b4 0x122400,0x64a8150e,0xcfc4885c
+awrite 0x122408,0x40ee75fe
+awrite.b5 0x124000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x124010,0x4416e4be
+awrite.b5 0x124400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x124410,0x4416e4be
+awrite.b4 0x126000,0x64a8150e,0xcfc4885c
+awrite 0x126008,0x40ee75fe
+awrite.b4 0x126200,0x64a8150e,0xcfc4885c
+awrite 0x126208,0x40ee75fe
+awrite.b4 0x128000,0x64a8150e,0xcfc4885c
+awrite 0x128008,0x40ee75fe
+awrite.b4 0x128400,0x64a8150e,0xcfc4885c
+awrite 0x128408,0x40ee75fe
+awrite.b5 0x12A000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x12A010,0x4416e4be
+awrite.b5 0x12A400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x12A410,0x4416e4be
+awrite.b4 0x12C000,0x64a8150e,0xcfc4885c
+awrite 0x12C008,0x40ee75fe
+awrite.b4 0x12C200,0x64a8150e,0xcfc4885c
+awrite 0x12C208,0x40ee75fe
+awrite.b4 0x12E000,0x64a8150e,0xcfc4885c
+awrite 0x12E008,0x40ee75fe
+awrite.b4 0x12E400,0x64a8150e,0xcfc4885c
+awrite 0x12E408,0x40ee75fe
+awrite.b5 0x130000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x130010,0x4416e4be
+awrite.b5 0x130400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x130410,0x4416e4be
+awrite.b4 0x132000,0x64a8150e,0xcfc4885c
+awrite 0x132008,0x40ee75fe
+awrite.b4 0x132200,0x64a8150e,0xcfc4885c
+awrite 0x132208,0x40ee75fe
+awrite.b4 0x134000,0x64a8150e,0xcfc4885c
+awrite 0x134008,0x40ee75fe
+awrite.b4 0x134400,0x64a8150e,0xcfc4885c
+awrite 0x134408,0x40ee75fe
+awrite.b5 0x136000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x136010,0x4416e4be
+awrite.b5 0x136400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite 0x136410,0x4416e4be
+.end
+#endif /* SD1_USXFI */
+
+/*
+ * lnx2_xfi
+ *
+ * Lynx 2 USXGMII/XFI RAM: needed only when the SerDes 2 protocol
+ * assigns lanes to USXFI (RM Table 290).
+ */
+#if SD2_USXFI
 .pbi
 awrite.b4 0x308000,0x64a8150e,0xcfc4885c
 awrite 0x308008,0x40ee75fe
@@ -281,6 +389,7 @@ awrite 0x312010,0x4416e4be
 awrite.b5 0x312400,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x312410,0x4416e4be
 .end
+#endif /* SD2_USXFI */
 
 .pbi
 loadacwindow 0x1C0

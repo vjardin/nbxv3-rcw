@@ -15,10 +15,14 @@
  *     A-050426                  paired SerDes config (with A-050479)
  *     A-009531 PEX3/4/5/6       PCIe IDO completion echo
  *     A-008851 PEX5/6           Gen3 RC equalisation (Gen3 only)
+ *     A-011270                  PCIe PF1 Function Dependency List
+ *     A-050234                  PCIe elastic-buffer thresholds
  *
- *   APPLIED VIA LOCAL TRIM:
- *     A-011270 (a011270_nbxv3)
- *     A-050234 (a050234_nbxv3)
+ *   Every one of these is the unmodified upstream file. A-011270,
+ *   A-050234 and A-050426 shrink themselves to what this board needs
+ *   because SRDS_PRTCL_S{1,2,3}_VAL are declared below and
+ *   <../lx2160asi/serdes_prtcl.rcw> turns them into per-block #if
+ *   conditions. There are no hand-trimmed local copies any more.
  *
  *   NOT APPLIED:
  *     A-009531 PEX1/2
@@ -109,11 +113,23 @@ USB3_CLK_FSEL=39               /* USB3 PHY reference = 100 MHz    */
  *   PLL3 (SD2 PLLF, PCIe.3/4)  <- 100 MHz (DPLL distribution)
  *   PLL6 (SD3 PLLS, PCIe.5/6)  <- 100 MHz (DPLL distribution)
  */
+/*
+ * The protocol numbers are stated as macros and the RCW fields are
+ * assigned from them, so there is a single source of truth. The errata
+ * below read the same macros through <../lx2160asi/serdes_prtcl.rcw>
+ * and skip whatever these protocols do not enable: that is what lets
+ * this board use the upstream errata unmodified instead of carrying
+ * hand-trimmed copies.
+ */
+#define SRDS_PRTCL_S1_VAL 13   /* 2x 100GE                                     */
+#define SRDS_PRTCL_S2_VAL 7    /* PCIe.3/4 + SGMII + USXGMII                   */
+#define SRDS_PRTCL_S3_VAL 3    /* PCIe.5 x4 + PCIe.6 x4                        */
+
 SRDS_PLL_PD_PLL2=1             /* SD1 PLLS unused                              */
 SRDS_PLL_PD_PLL5=1             /* SD3 PLLF unused                              */
-SRDS_PRTCL_S1=13               /* 2x 100GE                                     */
-SRDS_PRTCL_S2=7                /* PCIe.3/4 + SGMII + USXGMII                   */
-SRDS_PRTCL_S3=3                /* PCIe.5 x4 + PCIe.6 x4 */
+SRDS_PRTCL_S1=SRDS_PRTCL_S1_VAL
+SRDS_PRTCL_S2=SRDS_PRTCL_S2_VAL
+SRDS_PRTCL_S3=SRDS_PRTCL_S3_VAL
 SRDS_PLL_REF_CLK_SEL_S1=0      /* PLLF=0 (161 MHz); PLLS powered down            */
 SRDS_PLL_REF_CLK_SEL_S2=2      /* PLLS=1 (161 MHz), PLLF=0 (100 MHz)             */
 SRDS_PLL_REF_CLK_SEL_S3=0      /* PLLS=0 (100 MHz);  PLLF powered down           */
@@ -179,19 +195,16 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
  */
 #include <a050479.rcw>
 
-/* A-050426: SerDes configuration (must be paired with A-050479).
+/*
+ * A-050426: SerDes configuration (must be paired with A-050479).
  * Same global-SerDes scope as A-050479.
+ *
+ * The upstream file scrubs the Lynx 1 XFI RAM and all six PCIe
+ * controllers. SRDS_PRTCL_S1_VAL=13 puts no USXFI lane on SerDes 1 and
+ * no PCIe lane on PEX1/PEX2, so those blocks drop out on their own
+ * (-1088 B for lnx1_xfi, -152 B for PEX1/PEX2).
  */
-#ifndef RCW_FULL_A050426_SCRUB
-#define RCW_A050426_TRIM_LNX1_XFI 1
-#endif
-
-#ifdef RCW_A050426_TRIM_LNX1_XFI
-/* default and preferred one to save many bytes */
-#include "a050426_nbxv3.rcw"
-#else
 #include <a050426.rcw>
-#endif
 
 /* A-009531: PCIe IDO (ID-based-Ordering) completion echo. Applies
  * to every active PEX regardless of link speed.
@@ -234,19 +247,19 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
  */
 
 /*
- * A-011270 / A-050234: local trim variants are MANDATORY.
+ * A-011270: PCIe PF1 Function Dependency List.
+ *
+ * The upstream file writes SRIOV_FDL_DEVICE_ID1 on all six controllers.
+ * Only PCIe3 and PCIe5 implement SR-IOV (RM 22.4.1 / 22.4.2) and only
+ * those two are enabled here, so four of the six writes drop out.
  */
-
-#if defined(RCW_UPSTREAM_ERRATA) || defined(RCW_UPSTREAM_ERRATA_A011270)
 #include <a011270.rcw>
-#else
-/* default and preferred one to save many bytes */
-#include "a011270_nbxv3.rcw"
-#endif
 
-#if defined(RCW_UPSTREAM_ERRATA) || defined(RCW_UPSTREAM_ERRATA_A050234)
+/*
+ * A-050234: PCIe elastic-buffer thresholds.
+ *
+ * SerDes 1 carries no PCIe lane under protocol 13, so its whole block
+ * drops out. On SerDes 2 and 3 only sub-controllers a and c exist, so
+ * indices 1 and 3 drop out too.
+ */
 #include <a050234.rcw>
-#else
-/* default and preferred one to save many bytes */
-#include "a050234_nbxv3.rcw"
-#endif

@@ -189,6 +189,10 @@ jobs:
           meson setup build
           meson compile -C build
 
+      # The -I order mirrors meson.build: the local lx2160asi/ shadow of the
+      # protocol-gated errata first, then the SoC .rcwi, then the upstream
+      # tree. Without the shadow first this job compiles the unpatched
+      # upstream errata and disagrees with the meson build.
       - name: Recompile with rcw.py and diff bytes
         working-directory: nbxv3-rcw
         run: |
@@ -201,6 +205,7 @@ jobs:
             python3 ../rcw/rcw.py \
               -i "${src}" \
               -o "refbin/${name}.bin" \
+              -I lx2160asi \
               -I ../qoriq-rcw/data \
               -I ../rcw/lx2160asi
             if cmp "refbin/${name}.bin" "${bin}"; then

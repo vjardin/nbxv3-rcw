@@ -1,0 +1,43 @@
+Local shadow of the upstream NXP errata
+=======================================
+
+These four files are verbatim copies of NXP to be merged:
+
+    <rcw-ref-dir>/lx2160asi/{serdes_prtcl.rcw,a011270.rcw,
+                             a050234.rcw,a050426.rcw}
+
+as submitted to https://github.com/nxp-qoriq/rcw.
+
+They live here because the upstream merge has not landed yet, and this
+board cannot build without them.
+
+Precedence
+----------
+
+meson.build passes this directory to qoriq-rcw as the *first* -I, ahead
+of the SoC .rcwi directory and the upstream tree, so `#include <a050426.rcw>`
+finds the copy here. The layout deliberately mirrors upstream: because
+the copies are unmodified, their own
+
+    #include <../lx2160asi/serdes_prtcl.rcw>
+    #include <../serdes_28g.rcw>
+
+lines resolve relative to this directory first: the first picks up the
+local sibling, the second finds nothing here and falls through to the
+upstream tree. Anything not shadowed (lx2160a.rcwi, e100g1_split.rcw,
+a009531_*, a008851_*, a050479, serdes_28g.rcw) resolves upstream exactly
+as before.
+
+Do not edit these files in place. Change them upstream in the rcw tree
+and re-copy, so the two never drift.
+
+Retiring the shadow
+-------------------
+
+`meson setup` prints a per-file status:
+
+    errata shadow: a011270.rcw: local copy wins        <- not merged yet
+                   a011270.rcw: upstream matches, shadow can be deleted
+
+Once a file reports "upstream matches", delete it here and drop it from
+rcw_shadow_errata in meson.build.

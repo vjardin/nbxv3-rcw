@@ -27,6 +27,11 @@ Few paths are needed:
 | `-Dqoriq-rcw-data=` | `<qoriq-rcw-path>/data` | per-SoC `.rcwi` bitfield definitions |
 | `-Drcw-ref-dir=`    | `../rcw`       | upstream NXP RCWs, `lx2160asi/` and its errata|
 
+The local `lx2160asi/` directory is searched before both of those. It
+holds verbatim copies of four upstream errata files that teach an
+erratum to skip the blocks a board's SerDes protocol does not enable,
+pending their merge into `nxp-qoriq/rcw`; see `lx2160asi/README`.
+
 ### The PBL size gate
 
 The LX2160A Service Processor fails loading the PBI once its internal
