@@ -11,9 +11,8 @@
  *
  * Workaround for erratum A-011270 (PCIe SR-IOV PF1 Function-Dependency-
  * List read returns wrong value). Same fix as upstream (write 0x1 into
- * SRIOV_FDL_DEVICE_ID1) but on 4 controllers instead of 6 (smaller).
- * Upstream writes all of PEX1..PEX6, this file drops PEX1 and PEX2
- * because no SerDes protocol activates them on this board.
+ * SRIOV_FDL_DEVICE_ID1) but on 2 controllers instead of 6 (smaller).
+ * Upstream writes all of PEX1..PEX6, this file keeps PEX3 and PEX5.
  *
  * SerDes -> PEX activation map for nbxv3:
  *   SD1 protocol 13 -> 100GE.1 + 100GE.2          -> PEX1 OFF, PEX2 OFF
@@ -32,6 +31,14 @@
  * Offset 0x688 is NOT in the reference manual. It seems to be a Synopsys
  * DesignWare core register that NXP uses.
  *
+ * PEX4 and PEX6 dropped as well, leaving only the 2 controllers that
+ * have SR-IOV at all.
+ *
+ * This erratum is about PF1's Function Dependency List and its workaround
+ * programs SRIOV_FDL_DEVICE_ID1: on a controller without SR-IOV there is no
+ * PF1, so there is nothing to fix. The PEX4 and PEX6 seems without any SR-IOV
+ * block. TBC: is it a NXP lx2160arm documnetation gap or can we really
+ * drop those ? In any case, we SRIOv is not used yet.
  */
 
 .pbi
