@@ -1,0 +1,295 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 Free Mobile -- Vincent Jardin
+#
+# CI for nbxv3-rcw.
+#
+# There is no compiler in this repository: every job first has to build
+# the toolchain it needs. The dependency chain is
+#
+#   libqoriq-rcw  ->  qoriq-rcw  ->  nbxv3-rcw
+#
+# plus the upstream nxp-qoriq/rcw tree, which supplies both the errata
+# fragments this board includes (lx2160asi/a*.rcw, e100g1_split.rcw) and
+# the reference rcw.py used by the cross-validation job. Note that unlike
+# qoriq-rcw's own CI, the upstream tree is NOT optional here: without
+# lx2160asi/ the carrier variants do not even preprocess.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  LIBQORIQ_RCW_REPO: https://github.com/${{ github.repository_owner }}/libqoriq-rcw.git
+  LIBQORIQ_RCW_REF: main
+
+  QORIQ_RCW_REPO: https://github.com/${{ github.repository_owner }}/qoriq-rcw.git
+  QORIQ_RCW_REF: main
+
+  # Upstream NXP RCW repo: lx2160asi/ errata fragments + rcw.py.
+  RCW_UPSTREAM_REPO: https://github.com/nxp-qoriq/rcw.git
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        cc: [gcc, clang]
+    runs-on: ${{ matrix.os }}
+    name: build (${{ matrix.os }}, ${{ matrix.cc }})
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+      - name: Checkout nbxv3-rcw
+        uses: actions/checkout@v5
+        with:
+          path: nbxv3-rcw
+
+      - name: Clone libqoriq-rcw
+        run: |
+          git clone --depth 1 --branch "${LIBQORIQ_RCW_REF}" \
+            "${LIBQORIQ_RCW_REPO}" libqoriq-rcw
+
+      - name: Clone qoriq-rcw
+        run: |
+          git clone --depth 1 --branch "${QORIQ_RCW_REF}" \
+            "${QORIQ_RCW_REPO}" qoriq-rcw
+
+      - name: Clone upstream nxp-qoriq/rcw (lx2160asi errata fragments)
+        run: |
+          git clone --depth 1 "${RCW_UPSTREAM_REPO}" rcw
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build pkg-config \
+            libcmocka-dev libmcpp-dev pandoc \
+            gcc clang
+
+      - name: Build libqoriq-rcw
+        working-directory: libqoriq-rcw
+        run: |
+          meson setup build
+          meson compile -C build
+
+      - name: Build qoriq-rcw against sibling libqoriq-rcw
+        working-directory: qoriq-rcw
+        run: |
+          meson setup build -Dlibqoriq-rcw-path=../libqoriq-rcw
+          meson compile -C build
+
+      - name: Configure nbxv3-rcw
+        working-directory: nbxv3-rcw
+        run: meson setup build
+
+      - name: Compile every RCW variant
+        working-directory: nbxv3-rcw
+        run: meson compile -C build
+
+      - name: Run the PBL size gate
+        working-directory: nbxv3-rcw
+        run: meson test -C build --print-errorlogs
+
+      - name: Report PBL headroom
+        if: always()
+        working-directory: nbxv3-rcw
+        run: |
+          {
+            echo "### PBL size (${{ matrix.os }}, ${{ matrix.cc }})"
+            echo
+            echo '```'
+            for bin in build/*.bin; do
+              [ -f "$bin" ] || continue
+              ./tools/check-pbl-size.sh "$bin" || true
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the compiled RCW binaries
+        if: matrix.os == 'ubuntu-24.04' && matrix.cc == 'gcc'
+        uses: actions/upload-artifact@v7
+        with:
+          name: rcw-binaries
+          path: nbxv3-rcw/build/*.bin
+
+      - name: Upload meson logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: meson-logs-build-${{ matrix.os }}-${{ matrix.cc }}
+          path: |
+            libqoriq-rcw/build/meson-logs/
+            qoriq-rcw/build/meson-logs/
+            nbxv3-rcw/build/meson-logs/
+
+  cross-validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        cc: [gcc, clang]
+    runs-on: ${{ matrix.os }}
+    name: cross-validate (${{ matrix.os }}, ${{ matrix.cc }})
+    env:
+      CC: ${{ matrix.cc }}
+    steps:
+      - name: Checkout nbxv3-rcw
+        uses: actions/checkout@v5
+        with:
+          path: nbxv3-rcw
+
+      - name: Clone libqoriq-rcw
+        run: |
+          git clone --depth 1 --branch "${LIBQORIQ_RCW_REF}" \
+            "${LIBQORIQ_RCW_REPO}" libqoriq-rcw
+
+      - name: Clone qoriq-rcw
+        run: |
+          git clone --depth 1 --branch "${QORIQ_RCW_REF}" \
+            "${QORIQ_RCW_REPO}" qoriq-rcw
+
+      - name: Clone upstream nxp-qoriq/rcw (rcw.py + errata fragments)
+        run: |
+          git clone --depth 1 "${RCW_UPSTREAM_REPO}" rcw
+
+      - name: Install build/test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build pkg-config \
+            libcmocka-dev libmcpp-dev pandoc \
+            gcc clang python3
+
+      - name: Build libqoriq-rcw
+        working-directory: libqoriq-rcw
+        run: |
+          meson setup build
+          meson compile -C build
+
+      - name: Build qoriq-rcw against sibling libqoriq-rcw
+        working-directory: qoriq-rcw
+        run: |
+          meson setup build -Dlibqoriq-rcw-path=../libqoriq-rcw
+          meson compile -C build
+
+      - name: Compile every variant with qoriq-rcw
+        working-directory: nbxv3-rcw
+        run: |
+          meson setup build
+          meson compile -C build
+
+      - name: Recompile with rcw.py and diff bytes
+        working-directory: nbxv3-rcw
+        run: |
+          mkdir -p refbin
+          rc=0
+          for bin in build/*.bin; do
+            name=$(basename "$bin" .bin)
+            src="${name}.rcw"
+            echo "== ${src}"
+            python3 ../rcw/rcw.py \
+              -i "${src}" \
+              -o "refbin/${name}.bin" \
+              -I ../qoriq-rcw/data \
+              -I ../rcw/lx2160asi
+            if cmp "refbin/${name}.bin" "${bin}"; then
+              echo "   identical ($(wc -c < "${bin}") bytes)"
+            else
+              echo "   MISMATCH: qoriq-rcw and rcw.py disagree on ${src}" >&2
+              rc=1
+            fi
+          done
+          exit $rc
+
+      - name: Upload diverging binaries on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cross-validate-bins-${{ matrix.os }}-${{ matrix.cc }}
+          path: |
+            nbxv3-rcw/build/*.bin
+            nbxv3-rcw/refbin/*.bin
+
+  shellcheck:
+    runs-on: ubuntu-24.04
+    name: shellcheck
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+
+      - name: Run shellcheck on all shell scripts
+        run: |
+          shopt -s globstar nullglob
+          files=(**/*.sh)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No shell scripts found, skipping."
+            exit 0
+          fi
+          shellcheck --severity=style "${files[@]}"
+
+  dist:
+    runs-on: ubuntu-24.04
+    name: meson dist
+    steps:
+      - name: Checkout nbxv3-rcw (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          path: nbxv3-rcw
+
+      - name: Clone libqoriq-rcw
+        run: |
+          git clone --depth 1 --branch "${LIBQORIQ_RCW_REF}" \
+            "${LIBQORIQ_RCW_REPO}" libqoriq-rcw
+
+      - name: Clone qoriq-rcw
+        run: |
+          git clone --depth 1 --branch "${QORIQ_RCW_REF}" \
+            "${QORIQ_RCW_REPO}" qoriq-rcw
+
+      - name: Clone upstream nxp-qoriq/rcw (lx2160asi errata fragments)
+        run: |
+          git clone --depth 1 "${RCW_UPSTREAM_REPO}" rcw
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build pkg-config libcmocka-dev libmcpp-dev pandoc
+
+      - name: Build the toolchain
+        run: |
+          meson setup libqoriq-rcw/build libqoriq-rcw
+          meson compile -C libqoriq-rcw/build
+          meson setup qoriq-rcw/build qoriq-rcw -Dlibqoriq-rcw-path=../libqoriq-rcw
+          meson compile -C qoriq-rcw/build
+
+      - name: meson setup nbxv3-rcw
+        working-directory: nbxv3-rcw
+        run: meson setup build
+
+      - name: meson dist
+        working-directory: nbxv3-rcw
+        run: meson dist -C build --no-tests
+
+      - name: Upload dist tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist-tarball
+          path: nbxv3-rcw/build/meson-dist/*.tar.xz
