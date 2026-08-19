@@ -1,0 +1,252 @@
+/*
+ * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright 2026 Free Mobile - Vincent Jardin
+ *
+ * nbxv3 CARRIER LAYER - the IOs
+ *
+ * SerDes Protocol 1 - 13 (2x 100GE)
+ *
+ * Errata catalog (full NXP `rcw/lx2160asi/` set; see "ERRATA
+ * WORKAROUNDS" section below for full per-erratum justification
+ * and re-enable conditions):
+ *
+ *   APPLIED:
+ *     A-050479                  SerDes Gen2+ link-training fix
+ *     A-050426                  paired SerDes config (with A-050479)
+ *     A-009531 PEX3/4/5/6       PCIe IDO completion echo
+ *     A-008851 PEX5/6           Gen3 RC equalisation (Gen3 only)
+ *
+ *   APPLIED VIA LOCAL TRIM:
+ *     A-011270 (a011270_nbxv3)
+ *     A-050234 (a050234_nbxv3)
+ *
+ *   NOT APPLIED:
+ *     A-009531 PEX1/2
+ *     A-008851 PEX1/2
+ *     A-008851 PEX3/4           PEX3/4 = Gen2 x1 in SD2 proto 7
+ *                               errata is documented as Gen3-only
+ *     A-010554                  no SATA lanes on this board (SD2
+ *                               proto 7 + SD3 proto 3 = no SATA)
+ *
+ */
+
+#include "rcw_nbxv3_common.rcwi"
+
+/* Hardware-accelerator clock muxes  */
+HWA_CGA_M1_CLK_SEL=1
+HWA_CGB_M1_CLK_SEL=6           /* DCE = CGB_PLL2 / 2 = 450 MHz */
+
+/*
+ * Debug.
+ *
+ * SDBGEN=1   Secure Debug Enable. Exposes the ARM CoreSight DAP on
+ *            the external JTAG chain so a probe (J-Link, CodeWarrior
+ *            TAP) can halt/load/resume the A72s.
+ *
+ * BOOT_HO left at 0 (default)
+ *
+ * SB_EN=0 (default)
+ */
+SDBGEN=1
+
+/*
+ * Pin muxing.
+ *
+ * SPI1 (full 4 CS) + SPI3 (3 CS: PCS1..PCS3). SDHC1 unused on this
+ * board, the pad group is reassigned to SPI1. SPI3_PCS0 is
+ * unreachable while SPI1 is active (silicon constraint on
+ * SDHC1_BASE_PMUX, RM 4.9.8.9). SPI3 is used with PCS1..PCS3 only.
+ *
+ * Pin conflicts taken on (each is a deliberate departure from POR
+ * defaults, do not drop these unless the downstream consumer has
+ * been retired in hardware too):
+ *   - I2C5          (IIC5_PMUX=3 -> SPI3_SOUT/SIN)
+ *   - SDHC1         (unused -> SPI1 + SPI3 PCS1-3)
+ *   - UART1 RTS/CTS (UART1_RTSCTS_PMUX=2 -> UART3 TX/RX)
+ *   - UART2 RTS/CTS (UART2_RTSCTS_PMUX=2 -> UART4 TX/RX)
+ *   - MAC18 RGMII   (EC2_PMUX=2 -> TSEC_1588 inputs from DPLL)
+ *   - USB sideband  (USB_EXT_PMUX=1 -> GPIO4[28:25])
+ *   - XSPI1_A DATA[7:4] (XSPI1_A_DATA74_PMUX=1 -> GPIO2[28:31]) --
+ *                   reclaim the four upper XSPI flash data balls as
+ *                   GPIO2
+ *
+ * EC1 = MAC17 RGMII (management port) stays at default EC1_PMUX=0.
+ */
+IIC5_PMUX=3                    /* IIC5 -> SPI3_SOUT, SPI3_SIN     */
+SDHC1_BASE_PMUX=2              /* SDHC1 base -> SPI1 (SOUT/SIN/SCK/PCS0-3) */
+SDHC1_DIR_PMUX=3               /* SDHC1 dir  -> SPI3_PCS1/PCS2/PCS3 */
+SDHC1_DS_PMUX=2                /* SDHC1_DS   -> SPI3_SCK          */
+UART1_RTSCTS_PMUX=2            /* UART1 RTS/CTS -> UART3 TX/RX    */
+UART2_RTSCTS_PMUX=2            /* UART2 RTS/CTS -> UART4 TX/RX    */
+EC2_PMUX=2                     /* EC2 -> TSEC_1588 from on-board DPLL */
+USB_EXT_PMUX=1                 /* USB sideband pins -> GPIO4[28:25] */
+XSPI1_A_DATA74_PMUX=1          /* XSPI1_A_DATA[7:4] -> GPIO2[28:31] */
+USB3_CLK_FSEL=39               /* USB3 PHY reference = 100 MHz    */
+
+/*
+ * SerDes configuration.
+ *
+ * Lane allocation:
+ *   SD1 protocol 13: 100GE.1 (lanes 0-3) + 100GE.2 (lanes 4-7)
+ *                    PLLF (PLL1) feeds 25.78 Gbaud, PLLS (PLL2) idle
+ *   SD2 protocol 7 : PCIe.3 x1 (lane 0) + SGMII.12 (lane 1) +
+ *                    SGMII.17 (lane 2) + SGMII.18 (lane 3) +
+ *                    PCIe.4 x1 (lane 4) + SGMII.16 (lane 5) +
+ *                    USXGMII.13 (lane 6) + USXGMII.14 (lane 7)
+ *                    PLLF (PLL3) feeds lanes 0-5, PLLS (PLL4) feeds 6-7
+ *   SD3 protocol 3 : PCIe.5 x4 (lanes 0-3) + PCIe.6 x4 (lanes 4-7)
+ *                    PLLS (PLL6) feeds 8 GT/s, PLLF (PLL5) idle
+ *
+ * Reference clocks from on-board DPLL + OCXO:
+ *   SD1 PLLF = 161.1328125 MHz  (100GE 25.78 Gbaud)
+ *   SD2 PLLF = 100 MHz          (PCIe/SGMII lanes)
+ *   SD2 PLLS = 161.1328125 MHz  (USXGMII 10.3125 Gbaud)
+ *   SD3 PLLS = 100 MHz          (PCIe lanes)
+ *
+ * Frequency mapping:
+ *   PLL1 (SD1 PLLF, 100GE)     <- DPLL 161 MHz
+ *   PLL4 (SD2 PLLS, USXGMII)   <- DPLL 161 MHz
+ *   PLL3 (SD2 PLLF, PCIe.3/4)  <- 100 MHz (DPLL distribution)
+ *   PLL6 (SD3 PLLS, PCIe.5/6)  <- 100 MHz (DPLL distribution)
+ */
+SRDS_PLL_PD_PLL2=1             /* SD1 PLLS unused                              */
+SRDS_PLL_PD_PLL5=1             /* SD3 PLLF unused                              */
+SRDS_PRTCL_S1=13               /* 2x 100GE                                     */
+SRDS_PRTCL_S2=7                /* PCIe.3/4 + SGMII + USXGMII                   */
+SRDS_PRTCL_S3=3                /* PCIe.5 x4 + PCIe.6 x4 */
+SRDS_PLL_REF_CLK_SEL_S1=0      /* PLLF=0 (161 MHz); PLLS powered down            */
+SRDS_PLL_REF_CLK_SEL_S2=2      /* PLLS=1 (161 MHz), PLLF=0 (100 MHz)             */
+SRDS_PLL_REF_CLK_SEL_S3=0      /* PLLS=0 (100 MHz);  PLLF powered down           */
+SRDS_DIV_PEX_S2=2              /* PEX3/PEX4 max Gen2 (proto 7 x1 limit)          */
+/*
+ * SRDS_DIV_PEX_S3 - PEX5/PEX6 max link rate
+ *   01 -> 8 GT/s   (Gen3)  - CURRENTLY IN USE (NXP default; silicon max)
+ *   10 -> 5 GT/s   (Gen2)
+ *   11 -> 2.5 GT/s (Gen1)
+ *
+ * Silicon at Gen3 = NXP reference-board default (LX2160ARDB and
+ * family). What actually trains on the link is controlled by the
+ * kernel DTS max-link-speed.
+ *
+ * Active state:
+ *   - This field        : Gen3-capable    (8 GT/s max at SerDes/PLL)
+ *   - kernel DTS        : max-link-speed = <2>   (announces Gen2)
+ *   - U-Boot DTS        : max-link-speed = <2>   (mirror; moot)
+ *
+ * Why this is safe (DT < silicon):
+ *   - Silicon >= DT is the safe direction: the PLL has headroom
+ *     the controller never asks for. Electrically equivalent to
+ *     pure Gen1 traffic, no extra power cost beyond the PLL
+ *     standing rate.
+ *   - DT > silicon is the dangerous direction (LTSSM tries
+ *     Gen2/Gen3 on a PLL that cannot generate those rates,
+ *     link goes dead). TBC.
+ */
+SRDS_DIV_PEX_S3=1 /* PEX5/PEX6 Gen3 silicon (NXP default,
+                     kernel DTS clamps actual link at Gen2) */
+
+/* All 4 active PEX controllers default to Host (Root Complex).
+ * HOST_AGT_PEX3/4/5/6 stay at their reset value 0 - no explicit write. */
+
+/*
+ * PBI: GENCR1 SYSBARDISABLE.
+ *
+ * Recommended for all LX2160A boards. Sampled by A72 at reset
+ * de-assertion so it must be written during PBI (before the cores
+ * start). Per RM 9.3.1.56, SYSBARDISABLE=1 lets outer-shareable
+ * barriers terminate at the cluster snoop boundary instead of
+ * propagating system-wide, a perf optimisation for QMan / DPAA2
+ * workloads. Correctness-safe to omit, we keep it because nbxv3
+ * runs DPAA2 networking once SerDes 1's 100GE links are wired up
+ * in Linux.
+ */
+.pbi
+write DCFG_GENCR1, GENCR1_SYSBARDISABLE
+.end
+
+/*
+ *  ERRATA WORKAROUNDS: all the NXP catalog for LX2160A
+ *
+ * Source of truth: rcw/lx2160asi/a*.rcw (the upstream NXP rcw repo
+ * at github.com/nxp-qoriq/rcw
+ *
+ * Order matches NXP's recommended PBI ordering.
+ */
+
+/*
+ * A-050479: SerDes Gen2+ link-training speed-change fix (all 3 SD).
+ * Touches global SerDes config registers, no per-PEX gating.
+ */
+#include <a050479.rcw>
+
+/* A-050426: SerDes configuration (must be paired with A-050479).
+ * Same global-SerDes scope as A-050479.
+ */
+#ifndef RCW_FULL_A050426_SCRUB
+#define RCW_A050426_TRIM_LNX1_XFI 1
+#endif
+
+#ifdef RCW_A050426_TRIM_LNX1_XFI
+/* default and preferred one to save many bytes */
+#include "a050426_nbxv3.rcw"
+#else
+#include <a050426.rcw>
+#endif
+
+/* A-009531: PCIe IDO (ID-based-Ordering) completion echo. Applies
+ * to every active PEX regardless of link speed.
+ */
+#include <a009531_PEX3.rcw>
+#include <a009531_PEX4.rcw>
+#include <a009531_PEX5.rcw>
+#include <a009531_PEX6.rcw>
+
+/* A-008851: Gen3 RC equalisation presets. PCI Gen3 Root-Complex
+ * mode only.
+ */
+#include <a008851_PEX5.rcw>
+#include <a008851_PEX6.rcw>
+
+/*
+ * A-009531_PEX1 / A-009531_PEX2 - not applied.
+ *   Reason: PEX1/PEX2 are tied to SerDes 1, and SD1 = protocol 13
+ *   routes all 8 SD1 lanes to 100GE (no PCIe lanes for PEX1/PEX2).
+ *
+ *   #include <a009531_PEX1.rcw>   - DO NOT add.
+ *   #include <a009531_PEX2.rcw>   - DO NOT add.
+ */
+
+/*
+ * A-008851_PEX1..4 - not applied.
+ *   Reason for PEX1/PEX2: same as A-009531_PEX1/PEX2 above
+ *
+ *   #include <a008851_PEX1.rcw>   - DO NOT add
+ *   #include <a008851_PEX2.rcw>   - DO NOT add
+ *   #include <a008851_PEX3.rcw>   - DO NOT add
+ *   #include <a008851_PEX4.rcw>   - DO NOT add
+ */
+
+/*
+ * A-010554 - not applied.
+ *   SATA controller may fail to detect some hard drives.
+ *
+ *   #include <a010554.rcw> - DO NOT add. No SATA
+ */
+
+/*
+ * A-011270 / A-050234: local trim variants are MANDATORY.
+ */
+
+#if defined(RCW_UPSTREAM_ERRATA) || defined(RCW_UPSTREAM_ERRATA_A011270)
+#include <a011270.rcw>
+#else
+/* default and preferred one to save many bytes */
+#include "a011270_nbxv3.rcw"
+#endif
+
+#if defined(RCW_UPSTREAM_ERRATA) || defined(RCW_UPSTREAM_ERRATA_A050234)
+#include <a050234.rcw>
+#else
+/* default and preferred one to save many bytes */
+#include "a050234_nbxv3.rcw"
+#endif
