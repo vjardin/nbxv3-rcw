@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright 2026 Free Mobile - Vincent Jardin
+
+option('qoriq-rcw-path', type: 'string', value: '',
+       description: 'Path to the qoriq-rcw tree (default: ../qoriq-rcw). ' +
+                    'Its build/qoriq-rcw is preferred over one on PATH.')
+
+option('qoriq-rcw-data', type: 'string', value: '',
+       description: 'Directory holding the per-SoC .rcwi definitions ' +
+                    '(default: <qoriq-rcw-path>/data).')
+
+option('rcw-ref-dir', type: 'string', value: '',
+       description: 'Upstream NXP rcw tree; lx2160asi/ under it supplies the ' +
+                    'errata .rcw fragments (default: ../rcw).')
