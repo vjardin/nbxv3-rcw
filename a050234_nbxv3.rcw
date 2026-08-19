@@ -1,0 +1,44 @@
+/*
+ * The default configuration of the elastic buffer thresholds in the PCI
+ * Express controller is not optimal and can cause various link errors.
+ */
+
+.pbi
+
+#define SRDS_BASE 0x1ea0000 /* SerDes 1 */
+#include <../serdes_28g.rcw>
+write PEXaCR0(0), 0x20081004
+write PEXaCR0(1), 0x20081004
+write PEXaCR0(2), 0x20081004
+write PEXaCR0(3), 0x20081004
+write PEXaCR1(0), 0x00081004
+write PEXaCR1(1), 0x00081004
+write PEXaCR1(2), 0x00081004
+write PEXaCR1(3), 0x00081004
+#undef SRDS_BASE
+
+#define SRDS_BASE 0x1eb0000 /* SerDes 2 */
+#include <../serdes_28g.rcw>
+write PEXaCR0(0), 0x20081004
+write PEXaCR0(1), 0x20081004
+write PEXaCR0(2), 0x20081004
+write PEXaCR0(3), 0x20081004
+write PEXaCR1(0), 0x00081004
+write PEXaCR1(1), 0x00081004
+write PEXaCR1(2), 0x00081004
+write PEXaCR1(3), 0x00081004
+#undef SRDS_BASE
+
+#define SRDS_BASE 0x1ec0000 /* SerDes 3 */
+#include <../serdes_28g.rcw>
+write PEXaCR0(0), 0x20081004
+write PEXaCR0(1), 0x20081004
+write PEXaCR0(2), 0x20081004
+write PEXaCR0(3), 0x20081004
+write PEXaCR1(0), 0x00081004
+write PEXaCR1(1), 0x00081004
+write PEXaCR1(2), 0x00081004
+write PEXaCR1(3), 0x00081004
+#undef SRDS_BASE
+
+.end
