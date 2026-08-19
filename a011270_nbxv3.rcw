@@ -1,11 +1,42 @@
 /*
- * PCIe: Software will read incorrect Function Dependency List for PF1
- * Workaround: Program the FDL field in the SRIOV_FDL_DEVICE_ID1 register to 0x1
+ * SPDX-License-Identifier: BSD-3-Clause
+ *
+ * Derived from the upstream NXP tree, lx2160asi/a011270.rcw:
+ *   Copyright 2011-2016 Freescale Semiconductor, Inc
+ *   Copyright 2017-2020 NXP
+ * Modifications Copyright 2026 Free Mobile - Vincent Jardin
+ *
+ * Local nbxv3 variant of NXP's lx2160asi/a011270.rcw but with less
+ * bytes.
+ *
+ * Workaround for erratum A-011270 (PCIe SR-IOV PF1 Function-Dependency-
+ * List read returns wrong value). Same fix as upstream (write 0x1 into
+ * SRIOV_FDL_DEVICE_ID1) but on 4 controllers instead of 6 (smaller).
+ * Upstream writes all of PEX1..PEX6, this file drops PEX1 and PEX2
+ * because no SerDes protocol activates them on this board.
+ *
+ * SerDes -> PEX activation map for nbxv3:
+ *   SD1 protocol 13 -> 100GE.1 + 100GE.2          -> PEX1 OFF, PEX2 OFF
+ *   SD2 protocol  7 -> PCIe.3 x1 + ... + PCIe.4   -> PEX3 ON,  PEX4 ON
+ *   SD3 protocol  3 -> PCIe.5 x4 + PCIe.6 x4      -> PEX5 ON,  PEX6 ON
+ *
+ * These addresses come from (LX2160ARM Rev 1):
+ *
+ *   0x340_0000 - 0x340_FFFF   PCI Express 1 PF0/shared
+ *   0x350_0000 - 0x350_FFFF   PCI Express 2 PF0/shared
+ *
+ * and so on at a 0x10_0000 stride:
+ *   0x360 = PEX3, 0x370 = PEX4,
+ *   0x380 = PEX5, 0x390 = PEX6.
+ *
+ * Offset 0x688 is NOT in the reference manual. It seems to be a Synopsys
+ * DesignWare core register that NXP uses.
+ *
  */
 
 .pbi
-write 0x03600688,0x00000001
-write 0x03700688,0x00000001
-write 0x03800688,0x00000001
-write 0x03900688,0x00000001
+write 0x03600688,0x00000001        /* PEX3 SRIOV_FDL_DEVICE_ID1 */
+write 0x03700688,0x00000001        /* PEX4 SRIOV_FDL_DEVICE_ID1 */
+write 0x03800688,0x00000001        /* PEX5 SRIOV_FDL_DEVICE_ID1 */
+write 0x03900688,0x00000001        /* PEX6 SRIOV_FDL_DEVICE_ID1 */
 .end
