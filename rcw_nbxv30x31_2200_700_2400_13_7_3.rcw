@@ -1,0 +1,24 @@
+/*
+ * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright 2026 Free Mobile - Vincent Jardin
+ *
+ * LX2160A Nodebox v3 CPU Module - NBV30 / NBV31 CARRIER variant
+ * COM-HPC Server CPU NXP Module
+ *
+ * SerDes Protocol 1 - 13 2x 100GE
+ * SerDes Protocol 2 -  7 (2x USXGMII + 4x SGMII + 2x PCIe x1)
+ * SerDes Protocol 3 -  3 (2x PCIe x4, PCIe.5 = x2)
+ *
+ * NBV31 shares this file with NBV30.
+ *
+ * Compile:
+ *   qoriq-rcw -i rcw_nbxv30x31_2200_700_2400_13_7_3.rcw  \
+ *             -o rcw_nbxv30x31_2200_700_2400_13_7_3.bin  \
+ *             -I <qoriq-rcw>/data                        \
+ *             -I <upstream-rcw>/rcw/lx2160asi
+ */
+
+/* * Iliad nbxv3%d RCW v.<date> */
+#define NBXV3_CARRIER_DIGIT 0
+
+#include "rcw_nbxv3_carrier.rcwi"
