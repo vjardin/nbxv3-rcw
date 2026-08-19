@@ -7,16 +7,44 @@
  * Modifications Copyright 2026 Free Mobile - Vincent Jardin
  *
  * Local variant of NXP's lx2160asi/a050426.rcw with the lnx1_xfi RAM-scrub
- * block removed.
+ * block removed, and the PEX block narrowed to the PCIe controllers this
+ * board actually powers.
  *
  * A-050426: after PORESET de-assertion the internal RAM of QDMA, FECA and
  * PCIe may corrupt its first write or read access. The workaround scrubs
  * those RAMs from the PBI, and NXP splits it into four labelled blocks:
  *
- *      PEX            PCIe RAM            kept
+ *      PEX            PCIe RAM            kept, minus PEX1/PEX2
  *      lnx1_e100g     Lynx1 100G RAM      kept (SD1 100G + 4x25G)
  *      lnx1_xfi       Lynx1 XFI/10G RAM   <-- REMOVED
  *      lnx2_xfi       Lynx2 XFI RAM       kept (USXGMII13/14)
+ *
+ * == PEX1 / PEX2 (-152 bytes)
+ *
+ * SD1 runs SRDS_PRTCL_S1=13, which is 100GE without PCIe, so the SerDes
+ * protocol decoder leaves PEX1 and PEX2 power-gated. Some other errata on
+ * this board already skip them for exactly that same reason.
+ *
+ * Identifying which group is which controller took a derivation, because
+ * NXP labels none of them. The PEX block runs under ALTCFG window 0x1C2,
+ * so its offsets sit at (0x1C2 << 26) = 0x7_0800_0000, which the RM memory
+ * map gives as DCSR. The six groups land at DCSR offsets
+ *
+ *      0x0A50_8000   0x0A60_8000   0x0A70_8000
+ *      0x0A80_8000   0x0AA0_8000   0x0AB0_8000
+ *
+ * a 1 MiB stride with 0x0A90 unpopulated and two of them, 0x0A70 and
+ * 0x0AA0, carry twice as many scrub sites as the other four. RM 22.4.1 /
+ * 22.4.2: PCIe3 and PCIe5 are the only SR-IOV instances. Assigning PCIe1..6
+ * in address order across the six populated slots puts PCIe3 at 0x0A70 and
+ * PCIe5 at 0x0AA0, i.e. both double-sized slots, no other assignment
+ * satisfies both anchors. That fixes 0x0A50 = PEX1 and 0x0A60 = PEX2, the
+ * two dropped here.
+ *
+ * WARNING TBC: that is a deduction from the site-count / SR-IOV coincidence,
+ * not a statement in the RM, which does not name these DCSR sub-blocks.
+ * Removing writes is the safe direction, an un-scrubbed RAM that nothing
+ * ever accesses cannot corrupt an access, but it has NOT been full confirmed.
  *
  * == lnx1_xfi (-1088 bytes)
  *
@@ -79,19 +107,19 @@ awrite 0x117E60,0x80000001
 /* PEX */
 .pbi
 loadacwindow 0x1C2
-awrite.b4 0x2808000,0x64a8150e,0xcfc4885c
+awrite.b4 0x2808000,0x64a8150e,0xcfc4885c   /* PCIe4 */
 awrite 0x2808008,0x40ee75fe
 awrite.b5 0x2818000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2818010,0x4416e4be
 awrite.b5 0x2820000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2820010,0x4416e4be
-awrite.b4 0x2B08000,0x64a8150e,0xcfc4885c
+awrite.b4 0x2B08000,0x64a8150e,0xcfc4885c   /* PCIe6 */
 awrite 0x2B08008,0x40ee75fe
 awrite.b5 0x2B18000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2B18010,0x4416e4be
 awrite.b5 0x2B20000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2B20010,0x4416e4be
-awrite.b5 0x2708000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite.b5 0x2708000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f   /* PCIe3 (SR-IOV) */
 awrite 0x2708010,0x4416e4be
 awrite.b5 0x2728000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2728010,0x4416e4be
@@ -103,7 +131,7 @@ awrite.b5 0x2748000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2748010,0x4416e4be
 awrite.b5 0x2758000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2758010,0x4416e4be
-awrite.b5 0x2A08000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
+awrite.b5 0x2A08000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f   /* PCIe5 (SR-IOV) */
 awrite 0x2A08010,0x4416e4be
 awrite.b5 0x2A28000,0x64a8150e,0xcfc4885c,0x40ee75fe,0x4b19116f
 awrite 0x2A28010,0x4416e4be
