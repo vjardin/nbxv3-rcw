@@ -1,0 +1,33 @@
+/*
+ * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright 2026 Free Mobile - Vincent Jardin
+ *
+ * LX2160A Nodebox v3 CPU Module
+ * COM-HPC Server CPU NXP Module
+ * Carrier: NBV32
+ *
+ *   SRDS_PRTCL_S1=13  base protocol still 13, but NBV32 SPLITS one of the
+ *                     two 100G ports into 4x 25G via a PBI override (SD1
+ *                     lanes 4-7 -> 4x SFP28)
+ *
+ * Compile:
+ *   qoriq-rcw -i rcw_nbxv32_2200_700_2400_13_7_3.rcw  \
+ *             -o rcw_nbxv32_2200_700_2400_13_7_3.bin  \
+ *             -I <qoriq-rcw>/data                     \
+ *             -I <upstream-rcw>/rcw/lx2160asi
+ */
+
+/* * Iliad nbxv3%d RCW v.<date> */
+#define NBXV3_CARRIER_DIGIT 2
+
+#include "rcw_nbxv3_carrier.rcwi"
+
+/*
+ * NBV32 100G port split: 1x 100G + 4x 25G on SerDes 1.
+ *
+ * Resulting MAC map
+ *   lanes 0-3  -> 100G  = dpmac.2   (100GE.2, unchanged)
+ *   lanes 4-7  -> 4x25G = dpmac.3, dpmac.4, dpmac.5, dpmac.6
+ *   dpmac.1 (the former 100GE.1 aggregate) is gone
+ */
+#include <e100g1_split.rcw>
