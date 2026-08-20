@@ -6,7 +6,8 @@ These four files are verbatim copies of NXP to be merged:
     <rcw-ref-dir>/lx2160asi/{serdes_prtcl.rcw,a011270.rcw,
                              a050234.rcw,a050426.rcw}
 
-as submitted to https://github.com/nxp-qoriq/rcw.
+See: https://github.com/nxp-qoriq/rcw/pull/6
+
 
 They live here because the upstream merge has not landed yet, and this
 board cannot build without them.
