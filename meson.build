@@ -53,6 +53,7 @@ rcw_shadow_errata = [
   'a011270.rcw',
   'a050234.rcw',
   'a050426.rcw',
+  'a050479.rcw',
 ]
 
 rcw_common = files(
