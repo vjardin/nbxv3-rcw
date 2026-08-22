@@ -1,12 +1,14 @@
 Local shadow of the upstream NXP errata
 =======================================
 
-These four files are verbatim copies of NXP to be merged:
+These files are verbatim copies of NXP to be merged:
 
     <rcw-ref-dir>/lx2160asi/{serdes_prtcl.rcw,a011270.rcw,
-                             a050234.rcw,a050426.rcw}
+                             a050234.rcw,a050426.rcw,a050479.rcw}
 
-See: https://github.com/nxp-qoriq/rcw/pull/6
+See: https://github.com/nxp-qoriq/rcw/pull/6   (the first serie)
+     https://github.com/nxp-qoriq/rcw/pull/7   (a050479, and the
+                                                serdes_prtcl.rcw update)
 
 
 They live here because the upstream merge has not landed yet, and this
@@ -26,8 +28,11 @@ the copies are unmodified, their own
 lines resolve relative to this directory first: the first picks up the
 local sibling, the second finds nothing here and falls through to the
 upstream tree. Anything not shadowed (lx2160a.rcwi, e100g1_split.rcw,
-a009531_*, a008851_*, a050479, serdes_28g.rcw) resolves upstream exactly
-as before.
+a009531_*, a008851_*, serdes_28g.rcw) resolves upstream exactly as
+before.
+
+a010554.rcw is gated by the same PR 7 but is not shadowed: this board
+has no SATA and never includes it.
 
 Do not edit these files in place. Change them upstream in the rcw tree
 and re-copy, so the two never drift.
