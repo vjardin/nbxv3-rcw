@@ -47,7 +47,7 @@
 #define BUILD_DATE_M1   0       /* month tens           */
 #define BUILD_DATE_M0   8       /* month ones           */
 #define BUILD_DATE_D1   2       /* day tens             */
-#define BUILD_DATE_D0   0       /* day ones             */
+#define BUILD_DATE_D0   6       /* day ones             */
 
 #ifndef NBXV3_CARRIER_DIGIT
 #define NBXV3_CARRIER_DIGIT F
