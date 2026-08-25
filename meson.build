@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright 2026 Free Mobile - Vincent Jardin
 #
-# Nodebox v3 RCW sources -- one build for every carrier variant.
+# Nodebox v3 RCW sources - CPU module
 #
 # There is no compiler here: each target is a .rcw source run through
 # `qoriq-rcw` to produce the RCW+PBI binary the LX2160A boot Service Processor
@@ -68,20 +68,9 @@ endforeach
 # The boards
 rcw_variants = [
   {
-    'name': 'nbv30',
-    'src': 'rcw_nbxv30x31_2200_700_2400_13_7_3.rcw',
-    'desc': 'NBV30 / NBV31 carrier',
-  },
-  {
-    'name': 'nbv32',
-    'src': 'rcw_nbxv32_2200_700_2400_13_7_3.rcw',
-    'desc': 'NBV32 carrier (4x25G SerDes split)',
-  },
-  {
-    # Test variant
-    'name': 'nbv32-nosplit',
-    'src': 'rcw_nbxv32_nosplit_2200_700_2400_13_7_3.rcw',
-    'desc': 'NBV32 carrier, SerDes split deferred to U-Boot (test only)',
+    'name': 'nbv3',
+    'src': 'rcw_nbxv3_2200_700_2400_13_7_3.rcw',
+    'desc': 'Any carrier',
   },
   {
     'name': 'standalone',
