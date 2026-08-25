@@ -30,4 +30,6 @@
  *   lanes 4-7  -> 4x25G = dpmac.3, dpmac.4, dpmac.5, dpmac.6
  *   dpmac.1 (the former 100GE.1 aggregate) is gone
  */
+#ifndef NBXV3_NO_PBI_SPLIT
 #include <e100g1_split.rcw>
+#endif

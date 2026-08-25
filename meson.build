@@ -78,6 +78,12 @@ rcw_variants = [
     'desc': 'NBV32 carrier (4x25G SerDes split)',
   },
   {
+    # Test variant
+    'name': 'nbv32-nosplit',
+    'src': 'rcw_nbxv32_nosplit_2200_700_2400_13_7_3.rcw',
+    'desc': 'NBV32 carrier, SerDes split deferred to U-Boot (test only)',
+  },
+  {
     'name': 'standalone',
     'src': 'rcw_nbxv3_withoutIOs_nor.rcw',
     'desc': 'CPU module standalone, no PCIe / no Ethernet IO',
