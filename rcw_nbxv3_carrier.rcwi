@@ -4,7 +4,8 @@
  *
  * nbxv3 CARRIER LAYER - the IOs
  *
- * SerDes Protocol 1 - 13 (2x 100GE)
+ * SerDes Protocol 1 - 13 (2x 100GE) - default values, but uboot
+ *                     may change it at runtime becofore MC starts.
  *
  * Errata catalog (full NXP `rcw/lx2160asi/` set; see "ERRATA
  * WORKAROUNDS" section below for full per-erratum justification
@@ -91,8 +92,13 @@ USB3_CLK_FSEL=39               /* USB3 PHY reference = 100 MHz    */
  * SerDes configuration.
  *
  * Lane allocation:
- *   SD1 protocol 13: 100GE.1 (lanes 0-3) + 100GE.2 (lanes 4-7)
+ *   SD1 protocol 13: 100GE.2 (lanes 0-3) + 100GE.1 (lanes 4-7)
  *                    PLLF (PLL1) feeds 25.78 Gbaud, PLLS (PLL2) idle
+ *                    -> default
+ *
+ *                    40GE.2 (lanes 0-3) + 40GE.1 (lanes 4-7)
+ *                    PLLS (PLL2) feeds 10.3125 Gbaud, PLLF (PLL1) idle
+ *                    aka swap PLLx, same lanes, same MACs, same pins.
  *   SD2 protocol 7 : PCIe.3 x1 (lane 0) + SGMII.12 (lane 1) +
  *                    SGMII.17 (lane 2) + SGMII.18 (lane 3) +
  *                    PCIe.4 x1 (lane 4) + SGMII.16 (lane 5) +
@@ -103,6 +109,8 @@ USB3_CLK_FSEL=39               /* USB3 PHY reference = 100 MHz    */
  *
  * Reference clocks from on-board DPLL + OCXO:
  *   SD1 PLLF = 161.1328125 MHz  (100GE 25.78 Gbaud)
+ *   SD1 PLLS = 161.1328125 MHz  wired but unused for 100G.
+ *                               This is what makes 40G without HW changes
  *   SD2 PLLF = 100 MHz          (PCIe/SGMII lanes)
  *   SD2 PLLS = 161.1328125 MHz  (USXGMII 10.3125 Gbaud)
  *   SD3 PLLS = 100 MHz          (PCIe lanes)
@@ -121,16 +129,40 @@ USB3_CLK_FSEL=39               /* USB3 PHY reference = 100 MHz    */
  * this board use the upstream errata unmodified instead of carrying
  * hand-trimmed copies.
  */
-#define SRDS_PRTCL_S1_VAL 13   /* 2x 100GE                                     */
+/*
+ * 100G vs 40G: both use OPPOSITE SD1 PLLs
+ *
+ * SRDS_PLL_REF_CLK_SEL_S1[933:932] is (bit 1: PLLS, bit 0: PLLF)
+ *
+ * The errata trim is unaffected: <../lx2160asi/serdes_prtcl.rcw>
+ * classifies 20 exactly like 13 (SD1_E100G=1 - its "CAUI / 50G / 40G /
+ * 25G" block covers 40G - without any PEX neither USXFI on SD1), so both
+ * variants emit a byte-identical PBI.
+ */
+#if 1
+#define SRDS_PRTCL_S1_VAL 13   /* 2x 100GE (CAUI4, 4 lanes @ 25.78125 Gbaud)   */
+#else
+#define SRDS_PRTCL_S1_VAL 20   /* 2x 40GE  (XLAUI, 4 lanes @ 10.3125 Gbaud)    */
+#endif
 #define SRDS_PRTCL_S2_VAL 7    /* PCIe.3/4 + SGMII + USXGMII                   */
 #define SRDS_PRTCL_S3_VAL 3    /* PCIe.5 x4 + PCIe.6 x4                        */
 
+#if 1
 SRDS_PLL_PD_PLL2=1             /* SD1 PLLS unused                              */
+#else
+SRDS_PLL_PD_PLL1=1             /* SD1 PLLF unused (proto 20 is all-PLLS)       */
+SRDS_REFCLKF_DIS_S1=1          /* RM: mandatory whenever SD1 PLLF is unused    */
+#endif
+
 SRDS_PLL_PD_PLL5=1             /* SD3 PLLF unused                              */
 SRDS_PRTCL_S1=SRDS_PRTCL_S1_VAL
 SRDS_PRTCL_S2=SRDS_PRTCL_S2_VAL
 SRDS_PRTCL_S3=SRDS_PRTCL_S3_VAL
+#if 1
 SRDS_PLL_REF_CLK_SEL_S1=0      /* PLLF=0 (161 MHz); PLLS powered down            */
+#else
+SRDS_PLL_REF_CLK_SEL_S1=2      /* PLLS=1 (161 MHz @ 10.3125 G); PLLF off        */
+#endif
 SRDS_PLL_REF_CLK_SEL_S2=2      /* PLLS=1 (161 MHz), PLLF=0 (100 MHz)             */
 SRDS_PLL_REF_CLK_SEL_S3=0      /* PLLS=0 (100 MHz);  PLLF powered down           */
 SRDS_DIV_PEX_S2=2              /* PEX3/PEX4 max Gen2 (proto 7 x1 limit)          */
@@ -194,10 +226,10 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
  *
  * The upstream file writes PEXaCR8 for sub-controllers a and c of each
  * SerDes, six writes, and says software may write them blind. Blind is
- * safe but not free: SRDS_PRTCL_S1_VAL=13 is 2x 100GE, so SerDes 1
- * carries no PCIe lane and its two writes have no link to train. They
- * drop out on their own (-16 B); SD2 (proto 7) and SD3 (proto 3) keep
- * theirs.
+ * safe but not free: SRDS_PRTCL_S1_VAL is 13 (2x 100GE) or 20 (2x
+ * 40GE), and neither puts a PCIe lane on SerDes 1, so its two writes
+ * have no link to train. They drop out on their own (-16 B); SD2
+ * (proto 7) and SD3 (proto 3) keep theirs.
  */
 #include <a050479.rcw>
 
@@ -206,9 +238,8 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
  * Same global-SerDes scope as A-050479.
  *
  * The upstream file scrubs the Lynx 1 XFI RAM and all six PCIe
- * controllers. SRDS_PRTCL_S1_VAL=13 puts no USXFI lane on SerDes 1 and
- * no PCIe lane on PEX1/PEX2, so those blocks drop out on their own
- * (-1088 B for lnx1_xfi, -152 B for PEX1/PEX2).
+ * controllers. Neither SD1 protocol (13 or 20) puts a USXFI lane on
+ * SerDes 1 or a PCIe lane on PEX1/PEX2.
  */
 #include <a050426.rcw>
 
@@ -228,8 +259,9 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
 
 /*
  * A-009531_PEX1 / A-009531_PEX2 - not applied.
- *   Reason: PEX1/PEX2 are tied to SerDes 1, and SD1 = protocol 13
- *   routes all 8 SD1 lanes to 100GE (no PCIe lanes for PEX1/PEX2).
+ *   Reason: PEX1/PEX2 are tied to SerDes 1, and SD1 = protocol 13 (or
+ *   20) routes all 8 SD1 lanes to Ethernet (no PCIe lanes for
+ *   PEX1/PEX2).
  *
  *   #include <a009531_PEX1.rcw>   - DO NOT add.
  *   #include <a009531_PEX2.rcw>   - DO NOT add.
@@ -264,8 +296,8 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
 /*
  * A-050234: PCIe elastic-buffer thresholds.
  *
- * SerDes 1 carries no PCIe lane under protocol 13, so its whole block
- * drops out. On SerDes 2 and 3 only sub-controllers a and c exist, so
- * indices 1 and 3 drop out too.
+ * SerDes 1 carries no PCIe lane under protocol 13 or 20, so its whole
+ * block drops out. On SerDes 2 and 3 only sub-controllers a and c
+ * exist, so indices 1 and 3 drop out too.
  */
 #include <a050234.rcw>
