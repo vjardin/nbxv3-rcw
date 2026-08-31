@@ -46,9 +46,25 @@
 #define BUILD_DATE_Y0   6       /* year ones            */
 #define BUILD_DATE_M1   0       /* month tens           */
 #define BUILD_DATE_M0   8       /* month ones           */
-#define BUILD_DATE_D1   2       /* day tens             */
-#define BUILD_DATE_D0   6       /* day ones             */
+#define BUILD_DATE_D1   3       /* day tens             */
+#define BUILD_DATE_D0   1       /* day ones             */
 
+/*
+ * Carrier digit, the top nibble of the stamp. ATF and U-Boot decodes it.
+ * It is a place holder do enforce the RCW for cases when uboot cannot
+ * update it later on. Note that per the QorIQ's documentation,
+ * it should be done at RCW level, but my register analysis show that I
+ * can still change the PLL and Serdes settings as long as MC is not started.
+ *
+ *   0     any nbv3 board - one common RCW for every carrier
+ *   1     NBV30 / NBV31
+ *   2     NBV32
+ *   3..E  unassigned, treated like 0
+ *   F     bring-up RCW, no SerDes IO. Not just "unknown": U-Boot also
+ *         clears ${mcinitcmd} for it, because releasing MC onto
+ *         unclocked WRIOP wedges the board. Do NOT use F as the
+ *         default for a production RCW.
+ */
 #ifndef NBXV3_CARRIER_DIGIT
 #define NBXV3_CARRIER_DIGIT F
 #endif
