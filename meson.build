@@ -38,9 +38,6 @@ if rcw_ref_dir == ''
 endif
 rcw_errata_dir = rcw_ref_dir / 'lx2160asi'
 
-# Local shadow of the upstream errata.
-rcw_local_errata_dir = srcroot / 'lx2160asi'
-
 foreach d : [rcw_data_dir, rcw_errata_dir]
   if not fs.is_dir(d)
     error('include root not found: ' + d + '''
@@ -48,22 +45,11 @@ foreach d : [rcw_data_dir, rcw_errata_dir]
   endif
 endforeach
 
-rcw_shadow_errata = [
-  'serdes_prtcl.rcw',
-  'a011270.rcw',
-  'a050234.rcw',
-  'a050426.rcw',
-  'a050479.rcw',
-]
-
 rcw_common = files(
   'rcw_nbxv3_common.rcwi',
   'rcw_nbxv3_carrier.rcwi',
   'uart1_version.rcwi',
 )
-foreach f : rcw_shadow_errata
-  rcw_common += files('lx2160asi' / f)
-endforeach
 
 # The boards
 rcw_variants = [
@@ -96,7 +82,6 @@ foreach v : rcw_variants
       qoriq_rcw, '-w',
       '-i', '@INPUT@',
       '-o', '@OUTPUT@',
-      '-I', rcw_local_errata_dir,
       '-I', rcw_data_dir,
       '-I', rcw_errata_dir,
     ],
@@ -114,26 +99,9 @@ endforeach
 
 alias_target('rcws', rcw_bins)
 
-# Report whether each shadowed erratum still differs from upstream. Once a
-# line says "upstream matches", that copy is redundant and can be deleted.
-shadow_status = []
-foreach f : rcw_shadow_errata
-  upstream = rcw_errata_dir / f
-  if not fs.exists(upstream)
-    shadow_status += f + ': local only'
-  elif run_command('cmp', '-s', rcw_local_errata_dir / f, upstream,
-                   check: false).returncode() == 0
-    shadow_status += f + ': upstream matches, shadow can be deleted'
-  else
-    shadow_status += f + ': local copy wins'
-  endif
-endforeach
-
 summary({
   'qoriq-rcw': qoriq_rcw.full_path(),
   'SoC .rcwi': rcw_data_dir,
-  'local errata': rcw_local_errata_dir,
   'NXP errata': rcw_errata_dir,
-  'errata shadow': shadow_status,
   'variants': ', '.join(variant_names),
 }, section: 'nbxv3-rcw')
