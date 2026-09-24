@@ -301,3 +301,11 @@ write DCFG_GENCR1, GENCR1_SYSBARDISABLE
  * exist, so indices 1 and 3 drop out too.
  */
 #include <a050234.rcw>
+
+/*
+ * FlexSPI clock: DCFG FlexSPICR1 divisor 80 -> 28, so SCK goes from
+ * 700 MHz * 2 / 80 = 17.5 MHz to 700 * 2 / 28 = 50 MHz.
+ *
+ * Last in the PBI, same than for the LX2160ARDB.
+ */
+#include <flexspi_divisor_28.rcw>
