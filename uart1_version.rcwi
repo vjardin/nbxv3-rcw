@@ -46,8 +46,8 @@
 #define BUILD_DATE_Y0   6       /* year ones            */
 #define BUILD_DATE_M1   0       /* month tens           */
 #define BUILD_DATE_M0   9       /* month ones           */
-#define BUILD_DATE_D1   1       /* day tens             */
-#define BUILD_DATE_D0   7       /* day ones             */
+#define BUILD_DATE_D1   2       /* day tens             */
+#define BUILD_DATE_D0   4       /* day ones             */
 
 /*
  * Carrier digit, the top nibble of the stamp. ATF and U-Boot decodes it.
