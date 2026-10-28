@@ -75,6 +75,7 @@ SDBGEN=1
  *                   reclaim the four upper XSPI flash data balls as
  *                   GPIO2
  *   - IRQ[3:0]      (IRQ03_00_PMUX=1 -> GPIO3[3:0])
+ *   - IRQ[11:4]     (IRQ07_04_PMUX=1, IRQ11_08_PMUX=1 -> GPIO3[11:4])
  *
  * EC1 = MAC17 RGMII (management port) stays at default EC1_PMUX=0.
  */
@@ -88,6 +89,8 @@ EC2_PMUX=2                     /* EC2 -> TSEC_1588 from on-board DPLL */
 USB_EXT_PMUX=1                 /* USB sideband pins -> GPIO4[28:25] */
 XSPI1_A_DATA74_PMUX=1          /* XSPI1_A_DATA[7:4] -> GPIO2[28:31] */
 IRQ03_00_PMUX=1                /* IRQ[3:0] -> GPIO3[3:0] (PHY_MDINT#, I2C ALERT#) */
+IRQ07_04_PMUX=1                /* IRQ[7:4]  -> GPIO3[7:4]: TCA9539 I2C1, spi3-alert#, wake0/1 */
+IRQ11_08_PMUX=1                /* IRQ[11:8] -> GPIO3[11:8]: carrier-hot#, rtl8211fd int, ethsw-int# */
 USB3_CLK_FSEL=39               /* USB3 PHY reference = 100 MHz    */
 
 /*
