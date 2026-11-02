@@ -1,0 +1,7 @@
+Fragments sent upstream and not merged yet
+==========================================
+
+Copies, byte for byte, of lx2160asi fragments that are in a pull
+request to nxp-qoriq/rcw and not in its devel branch yet.
+
+a010650.rcw    https://github.com/nxp-qoriq/rcw/pull/8

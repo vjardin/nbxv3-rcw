@@ -45,11 +45,30 @@ foreach d : [rcw_data_dir, rcw_errata_dir]
   endif
 endforeach
 
+# sent upstream and not merged yet
+# drop those once available from https://github.com/nxp-qoriq/rcw
+pending_dir = srcroot / 'pending'
+pending_fragments = ['a010650.rcw']
+pending_files = []
+foreach f : pending_fragments
+  pending_files += files('pending' / f)
+  if fs.is_file(rcw_errata_dir / f)
+    warning(f + ' is in ' + rcw_errata_dir + ': delete pending/' + f
+            + ' once that checkout is origin/devel')
+    test(
+      'pending-' + f + '-matches-upstream',
+      find_program('cmp'),
+      args: [files('pending' / f), rcw_errata_dir / f],
+      suite: 'pending',
+    )
+  endif
+endforeach
+
 rcw_common = files(
   'rcw_nbxv3_common.rcwi',
   'rcw_nbxv3_carrier.rcwi',
   'uart1_version.rcwi',
-)
+) + pending_files
 
 # The boards
 rcw_variants = [
@@ -84,6 +103,7 @@ foreach v : rcw_variants
       '-o', '@OUTPUT@',
       '-I', rcw_data_dir,
       '-I', rcw_errata_dir,
+      '-I', pending_dir,
     ],
   )
   rcw_bins += bin
