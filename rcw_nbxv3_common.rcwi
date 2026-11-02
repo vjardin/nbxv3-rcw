@@ -51,9 +51,11 @@ SYSCLK_FREQ=600
 
 #include "uart1_version.rcwi"
 
+/* A-010650: prime the DCSR pad-mux view */
+#include <a010650.rcw>
+
 /* PBI: Boot Location Pointer */
 .pbi
 write 0x01e00404, 0x00000000             /* DCFG_BOOTLOCPTRH = 0 */
 write 0x01e00400, NBXV3_BL2_BOOT_ENTRY   /* DCFG_BOOTLOCPTRL = NOR AHB BL2 XIP entry */
 .end
-
