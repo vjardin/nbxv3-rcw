@@ -205,9 +205,9 @@ jobs:
             python3 ../rcw/rcw.py \
               -i "${src}" \
               -o "refbin/${name}.bin" \
+              -I lx2160asi \
               -I ../qoriq-rcw/data \
-              -I ../rcw/lx2160asi \
-              -I pending
+              -I ../rcw/lx2160asi
             if cmp "refbin/${name}.bin" "${bin}"; then
               echo "   identical ($(wc -c < "${bin}") bytes)"
             else
